@@ -1,0 +1,21 @@
+{
+  "name": "小手机",
+  "short_name": "小手机",
+  "description": "An AI chat companion app.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ededed",
+  "theme_color": "#353535",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
