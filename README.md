@@ -58,6 +58,30 @@ Your app will be live at `https://<your-username>.github.io/chaat/` in a few min
 
 This application is configured as a Progressive Web App (PWA). You can install it on your mobile device's home screen for an app-like experience with offline access. This is handled automatically by the `vite-plugin-pwa` configuration.
 
-## AI Multi-Message Feature
+## Advanced AI Features
 
-To make conversations feel more natural, the AI is instructed to sometimes split its reply into multiple shorter messages using a special separator: `|||`. The app automatically splits the text at each separator and displays each part as a separate chat bubble.
+To create a more dynamic and engaging chat experience, the AI has been programmed with special capabilities beyond simple text replies.
+
+### Multi-Message Replies
+
+To simulate the natural flow of a real text conversation, the AI is instructed to split longer thoughts into multiple, short messages. It does this by using a special `|||` separator between sentences. The app recognizes this separator and displays each part as an individual chat bubble, creating a more realistic back-and-forth rhythm.
+
+### Special Message Types
+
+The AI can also send various types of rich content by using specific text formats in its response. This allows for more interactive and visually interesting conversations.
+
+-   **Stickers**: The AI can send any of your custom stickers by name.
+    -   **Format**: `[sticker:sticker_name]`
+    -   **Example**: `[sticker:happy_cat]`
+
+-   **Transfers**: The AI can simulate sending a "red packet" or money transfer.
+    -   **Format**: `[transfer:AMOUNT:NOTES]`
+    -   **Example**: `[transfer:8.88:Good luck!]`
+
+-   **Images**: The AI can send a placeholder image bubble with a description of what the image would be.
+    -   **Format**: `[image:A description of the image]`
+    -   **Example**: `[image:A photo of a cute kitten sleeping in a sunbeam]`
+
+-   **Locations**: The AI can share a location.
+    -   **Format**: `[location:Name of the location]`
+    -   **Example**: `[location:Eiffel Tower]`

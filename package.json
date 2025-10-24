@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "homepage": "https://shen276.github.io/chaat",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,6 +12,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.25.0",
+    "dexie": "^4.0.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
