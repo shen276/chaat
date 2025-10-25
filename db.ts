@@ -1,3 +1,5 @@
+
+
 // FIX: The main Dexie class is a default export, so it must be imported as `import Dexie from 'dexie'`.
 // The previous named import (`import { Dexie }`) was incorrect and caused all subsequent TypeScript errors
 // because the compiler did not recognize the class and its methods (`.version()`, `.transaction()`, etc.).
@@ -25,6 +27,9 @@ export interface Character {
     nicknameForUser?: string;
     systemInstruction: string;
     autoReplyDelay?: number; // Delay in minutes before sending an auto-reply. 0 or undefined means disabled.
+    todos?: { id: number; text: string; done: boolean; }[];
+    anniversaries?: { id: number; name: string; date: string; pinned?: boolean; }[];
+    historyMemory?: number; // Max number of past messages to include in history. 0 or undefined for unlimited.
 }
 
 export type ChatMessagePayload = 

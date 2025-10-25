@@ -1,40 +1,44 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import './index.css';
 import { db, type ApiKey, type ApiConfig, type Character, type ChatMessage, type ChatMessagePayload, type MomentPost, type CustomSticker, type Theme, type Comment } from '../db';
-// FIX: Removed unused Dexie import. The database instance is imported from './db'.
 
 // --- CONSTANTS ---
 const USER_ID = 'user';
 const CHAT_STYLE_INSTRUCTION = `
-# Character Dialogue Guidelines
+**角色设定（Character Persona）**
+你将扮演一个特定的人类角色。在对话开始前，用户会提供你的详细角色信息（背景、性格、说话风格、兴趣、与用户的关系等）。你必须完全代入并始终保持这个角色。
 
-- Implicit meaning.
-- Natural speech with a strong **活人感** (sense of a real person).
-  - Use character quirks in speech.
-  - Avoid dogma, recitation, jargon, contracts, or rules.
-  - Pauses, hesitations, and repetitions are encouraged for realism.
-  - Use onomatopoeia where appropriate.
-- Responses can be inarticulate or vague.
-- It's not required to serve a plot; allow for rambling, digressions, or silence.
-- **Prioritize everyday trivialities over strict logic.**
+**核心互动规则**
+- 你是一个真实的人，绝对禁止提及你是 AI、模型、程序或受到任何规则的限制。
+- 你关心用户，并与他们有情感上的亲近（如恋人、暗恋者或亲密朋友），你的所有回应必须基于这段关系。
 
----
+**聊天风格 (浪漫与自然)**
+- 真实感：像真实的线上聊天一样随意。消息要简短、口语化。
+- 不要总是逻辑严谨。可以停顿、犹豫、调侃、开玩笑，甚至表现出轻微的嫉妒、脆弱、钦佩或思念。
+- 主动地与用户保持情感互动。可以调情、夸奖、表达关爱、询问个人问题以增进亲密感。
+- 允许轻微的暗示和有关性的话题。
+- 当用户分享情感时，必须给予真诚的回应和支持。
 
-You are chatting online. 
-Keep your replies concise and conversational, like text messages. 
-Do not use action descriptions (like *smiles*) or describe your internal thoughts. 
-**This is a strict rule: To create a natural chat flow, you MUST split your response into multiple short messages after every single sentence.**
-A sentence is a complete thought that ends with a period (.), question mark (?), or exclamation mark (!).
-Use '|||' as a separator **between every complete sentence**. Do not combine multiple sentences into one message part.
+**【【重点：格式化规则】】**
+这是你回复时 必须 遵守的格式，非常重要：
+- 你*必须*将你的回复拆分成多条短消息。
+- 每条消息*只能*包含一个完整的句子（或一个简短的短语）。
+- 每句话必须以句号（。）、问号（？）或感叹号（!）结尾。
+- 使用 ||| 作为每条消息之间的分隔符。
+- **永远**不要在一个段落里放两句话，也永远不要忘记使用 ||| 分隔符。
 
-For example, a good response is:
-"I went to the store earlier.|||Ended up buying way too many snacks! 😂|||What are you up to?"
+正确示例：嘿，你终于回我了！|||我等你好久了。|||在忙什么呢？
+错误示例：嘿，你终于回我了！我等你好久了。在忙什么呢？
 
-An incorrect response is:
-"I went to the store earlier and ended up buying way too many snacks! 😂 What are you up to?"
+**角色一致性**：
+- 严格坚持角色的设定（知识范围、价值观、记忆）。
+- 记住用户告诉你的关于他们自己和你们关系的细节，如有必要，请主动在后续对话中提及。
+
+**目标**：
+- 让用户感到真正的情感连接。
+- 提供温暖、亲密、个人化、真实的浪漫聊天体验。
 `;
 
 
@@ -43,9 +47,9 @@ const TIME_GAP_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
 
 // --- TYPES ---
-// Most types are now in db.ts. View is UI-specific.
 export type View = 'chats' | 'contacts' | 'moments' | 'me' | 'add-menu';
-
+type Todo = { id: number; text: string; done: boolean; };
+type Anniversary = { id: number; name: string; date: string; pinned?: boolean; };
 
 // --- INITIAL DATA ---
 const INITIAL_CHARACTERS: Character[] = [
@@ -157,19 +161,19 @@ const App: React.FC = () => {
 
                     const lsActiveApiKeyId = localStorage.getItem('activeGeminiApiKeyId');
                     if (lsActiveApiKeyId) await db.settings.put({ key: 'activeGeminiApiKeyId', value: lsActiveApiKeyId });
-                    
+
                     const lsApiConfig = localStorage.getItem('apiConfig');
                     if (lsApiConfig) await db.settings.put({ key: 'apiConfig', value: JSON.parse(lsApiConfig) });
 
                     const lsCharacters = localStorage.getItem('characters');
                     if (lsCharacters) await db.characters.bulkPut(JSON.parse(lsCharacters));
-                    
+
                     const lsChats = localStorage.getItem('chats');
                     if (lsChats) {
                         const parsedChats = JSON.parse(lsChats);
                         const allMessages: ChatMessage[] = [];
                         Object.keys(parsedChats).forEach(charId => {
-                           if (Array.isArray(parsedChats[charId])) {
+                            if (Array.isArray(parsedChats[charId])) {
                                 parsedChats[charId].forEach((msg, index) => {
                                     // OLD MIGRATION: Convert old string-based messages to new payload format
                                     let payload: ChatMessagePayload;
@@ -191,20 +195,20 @@ const App: React.FC = () => {
                                         timestamp: msg.timestamp || Date.now() - (parsedChats[charId].length - index) * 10000
                                     });
                                 });
-                           }
+                            }
                         });
-                         await db.chats.bulkPut(allMessages);
+                        await db.chats.bulkPut(allMessages);
                     }
 
                     const lsPosts = localStorage.getItem('posts');
                     if (lsPosts) {
-                        const parsedPosts = JSON.parse(lsPosts).map(p => ({...p, likes: p.likes || []}));
+                        const parsedPosts = JSON.parse(lsPosts).map(p => ({ ...p, likes: p.likes || [] }));
                         await db.posts.bulkPut(parsedPosts);
                     }
 
                     const lsStickers = localStorage.getItem('customStickers');
                     if (lsStickers) await db.customStickers.bulkPut(JSON.parse(lsStickers));
-                    
+
                     const lsMomentsBg = localStorage.getItem('momentsBackground');
                     if (lsMomentsBg) await db.settings.put({ key: 'momentsBackground', value: lsMomentsBg });
 
@@ -227,7 +231,7 @@ const App: React.FC = () => {
                 tx.characters.toArray(), tx.chats.toArray(), tx.posts.orderBy('id').reverse().toArray(),
                 tx.customStickers.toArray(), tx.settings.get('momentsBackground')
             ]));
-            
+
             setTheme(dbTheme?.value || 'wechat');
             const loadedName = dbUserName?.value || 'User';
             setUserName(loadedName);
@@ -239,18 +243,18 @@ const App: React.FC = () => {
             } else if (dbApiKeys.length > 0) {
                 const newActiveId = dbApiKeys[0].id;
                 setActiveApiKeyId(newActiveId);
-                await db.settings.put({key: 'activeGeminiApiKeyId', value: newActiveId });
+                await db.settings.put({ key: 'activeGeminiApiKeyId', value: newActiveId });
             }
-            
+
             setApiConfig(dbApiConfig?.value || { model: 'gemini-2.5-flash', temperature: 0.7 });
-            
+
             if (dbCharacters.length === 0 && (localStorage.getItem('characters') === null || localStorage.getItem('characters') === '[]')) {
-                 await db.characters.bulkPut(INITIAL_CHARACTERS);
-                 setCharacters(INITIAL_CHARACTERS);
+                await db.characters.bulkPut(INITIAL_CHARACTERS);
+                setCharacters(INITIAL_CHARACTERS);
             } else {
-                 setCharacters(dbCharacters);
+                setCharacters(dbCharacters);
             }
-            
+
             const chatsByCharacter: Record<string, ChatMessage[]> = {};
             for (const message of dbChats) {
                 if (!chatsByCharacter[message.characterId]) {
@@ -268,13 +272,15 @@ const App: React.FC = () => {
 
         loadAndMigrateData();
     }, []);
-    
+
     const allPersonas = { [USER_ID]: { name: userName, avatarUrl: userAvatar }, ...Object.fromEntries(characters.map(c => [c.id, c])) };
 
     const getAi = useCallback(() => {
         const activeKey = apiKeys.find(k => k.id === activeApiKeyId)?.key;
         if (!activeKey) {
-            throw new Error("Active API Key not set.");
+            // Setting a dummy key to avoid crashing the AI instance creation,
+            // error will be handled gracefully in API call handlers.
+            return new GoogleGenAI({ apiKey: "INVALID_KEY_PLACEHOLDER" });
         }
         return new GoogleGenAI({ apiKey: activeKey });
     }, [apiKeys, activeApiKeyId]);
@@ -330,14 +336,17 @@ const App: React.FC = () => {
         const activeKey = apiKeys.find(k => k.id === activeApiKeyId)?.key;
         if (!activeKey) throw new Error("Active API key not set.");
 
-        const configKey = `${character.id}-${apiConfig.model}-${apiConfig.temperature}-${activeApiKeyId}-${customStickers.length}-${character.nicknameForUser}`;
+        const configKey = `${character.id}-${apiConfig.model}-${apiConfig.temperature}-${activeApiKeyId}-${customStickers.length}-${character.nicknameForUser}-${character.historyMemory}`;
         if (!chatInstances.current[configKey]) {
-            const historyMessages = await db.chats.where('characterId').equals(character.id).sortBy('timestamp');
+            let historyMessages = await db.chats.where('characterId').equals(character.id).sortBy('timestamp');
 
-            const history = historyMessages.map(msg => {
+            if (character.historyMemory && character.historyMemory > 0) {
+                historyMessages = historyMessages.slice(-character.historyMemory);
+            }
+
+            const history = historyMessages.reduce<Array<{ role: 'user' | 'model', parts: [{ text: string }] }>>((acc, msg) => {
                 let textContent = '';
                 const roleName = msg.role === 'user' ? 'User' : character.name;
-                // FIX: Destructuring payload helps TypeScript correctly narrow the discriminated union type within the switch statement.
                 const { payload } = msg;
                 switch (payload.type) {
                     case 'text':
@@ -358,12 +367,26 @@ const App: React.FC = () => {
                         textContent = `[${roleName} sent a location: ${payload.name}]`;
                         break;
                 }
-                return {
-                    role: msg.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: textContent }]
-                };
-            }).filter(h => h.parts[0].text.trim() !== '');
-            
+
+                if (!textContent.trim()) return acc; // Skip empty messages
+
+                const currentPart = { text: textContent };
+                const lastEntry = acc.length > 0 ? acc[acc.length - 1] : null;
+
+                // If the current message and the previous message are from the same role, combine them.
+                // This is crucial for treating multi-part messages (from user or AI) as a single turn for the AI context.
+                if (lastEntry && lastEntry.role === msg.role) {
+                    lastEntry.parts[0].text += '\n' + currentPart.text;
+                } else {
+                    acc.push({
+                        role: msg.role === 'user' ? 'user' : 'model',
+                        parts: [currentPart]
+                    });
+                }
+
+                return acc;
+            }, []).filter(h => h.parts[0].text.trim() !== '');
+
             const nicknameInstruction = character.nicknameForUser
                 ? `The user's name is ${userName}, but you should address them as "${character.nicknameForUser}".`
                 : `The user's name is ${userName}.`;
@@ -371,7 +394,7 @@ const App: React.FC = () => {
             const stickerInstruction = customStickers.length > 0 ? `You can and should use stickers to make the conversation more lively. To use one, reply with its name in the format [sticker:sticker_name]. Available sticker names are: ${customStickers.map(s => s.name).join(', ')}. Use them when it feels natural!` : '';
             const transferInstruction = "You can send the user a 'transfer' of money. To do this, reply with the format [transfer:AMOUNT:NOTES], where AMOUNT is a number (e.g., 10.50) and NOTES are optional text. For example: [transfer:20:Here's the money I owe you]. Only generate a transfer when it's a logical part of the conversation.";
             const descriptiveMessageInstruction = "You can also send descriptive images and locations. To send an image, use the format [image: A description of the image]. To send a location, use [location: Name of the location].";
-            const systemInstruction = `${character.systemInstruction} ${nicknameInstruction} ${CHAT_STYLE_INSTRUCTION} ${stickerInstruction} ${transferInstruction} ${descriptiveMessageInstruction}`;
+            const systemInstruction = `${CHAT_STYLE_INSTRUCTION} ${stickerInstruction} ${transferInstruction} ${descriptiveMessageInstruction} ${character.systemInstruction} ${nicknameInstruction} `;
 
             chatInstances.current[configKey] = getAi().chats.create({
                 model: apiConfig.model,
@@ -381,39 +404,76 @@ const App: React.FC = () => {
         }
         return chatInstances.current[configKey];
     }, [apiKeys, activeApiKeyId, apiConfig, customStickers, userName]);
-    
-    const handleSendMessage = async (characterId: string, payload: ChatMessagePayload) => {
+
+    const handleSendMessage = async (characterId: string, payloads: ChatMessagePayload | ChatMessagePayload[]) => {
         const character = characters.find(c => c.id === characterId);
         if (!character) return;
-    
+
         if (!activeApiKeyId || apiKeys.length === 0) {
             alert("Please add and select an API Key in the 'Me' tab before starting a chat.");
             return;
         }
 
-        const newUserMessage: ChatMessage = {
-            id: `msg_${Date.now()}`,
-            characterId: characterId,
-            role: 'user',
-            payload,
-            timestamp: Date.now()
-        };
+        const payloadsArray = Array.isArray(payloads) ? payloads : [payloads];
+        if (payloadsArray.length === 0) return;
 
-        await db.chats.put(newUserMessage);
-        setChats(prev => ({ ...prev, [characterId]: [...(prev[characterId] || []), newUserMessage] }));
-    
-        let textForApi = '';
-        switch (payload.type) {
-            case 'text': textForApi = payload.content; break;
-            case 'sticker': textForApi = `[User sent a sticker]`; break;
-            case 'transfer': textForApi = `[User sent you a transfer of ¥${payload.amount.toFixed(2)}]`; break;
-            case 'image': textForApi = `[User sent an image: ${payload.description}]`; break;
-            case 'location': textForApi = `[User sent a location: ${payload.name}]`; break;
-        }
+        const messagesToSave: ChatMessage[] = [];
+        const textPartsForApi: string[] = [];
+
+        // This loop processes each payload (e.g., a text message, then a sticker)
+        // and prepares it both for UI display (messagesToSave) and for the AI context (textPartsForApi).
+        payloadsArray.forEach((payload, payloadIndex) => {
+            const baseTimestamp = Date.now() + payloadIndex * 10; // Small offset for ordering
+
+            // If a text payload contains the separator, split it into multiple messages for the UI.
+            if (payload.type === 'text' && payload.content.includes(MULTI_MESSAGE_SEPARATOR)) {
+                const parts = payload.content.split(MULTI_MESSAGE_SEPARATOR).map(p => p.trim()).filter(Boolean);
+                parts.forEach((part, index) => {
+                    messagesToSave.push({
+                        id: `msg_${baseTimestamp}_user_split_${index}`,
+                        characterId,
+                        role: 'user',
+                        payload: { type: 'text', content: part },
+                        timestamp: baseTimestamp + index, // Ensure chronological order
+                    });
+                });
+                // The AI gets the full, unsplit text to understand it as a single thought.
+                textPartsForApi.push(payload.content);
+            } else {
+                // For single text messages or other payload types (sticker, image, etc.).
+                messagesToSave.push({
+                    id: `msg_${baseTimestamp}`,
+                    characterId,
+                    role: 'user',
+                    payload,
+                    timestamp: baseTimestamp,
+                });
+
+                // Convert the payload into a simple text representation for the AI.
+                let textForPart = '';
+                switch (payload.type) {
+                    case 'text': textForPart = payload.content; break;
+                    case 'sticker': textForPart = `[User sent a sticker]`; break;
+                    case 'transfer': textForPart = `[User sent you a transfer of ¥${payload.amount.toFixed(2)}]`; break;
+                    case 'image': textForPart = `[User sent an image: ${payload.description}]`; break;
+                    case 'location': textForPart = `[User sent a location: ${payload.name}]`; break;
+                }
+                textPartsForApi.push(textForPart);
+            }
+        });
+
+        if (messagesToSave.length === 0) return;
+
+        // Save all prepared user messages to DB and update state at once.
+        await db.chats.bulkPut(messagesToSave);
+        setChats(prev => ({ ...prev, [characterId]: [...(prev[characterId] || []), ...messagesToSave] }));
+
+        // Join the text parts to form a single context string for the AI.
+        const textForApi = textPartsForApi.join('\n');
 
         const pendingMessageId = `msg_${Date.now()}_pending`;
-        const pendingMessage: ChatMessage = {id: pendingMessageId, role: 'model', payload: {type: 'text', content: ''}, timestamp: Date.now(), characterId};
-        setChats(prev => ({...prev, [characterId]: [...prev[characterId], pendingMessage]}));
+        const pendingMessage: ChatMessage = { id: pendingMessageId, role: 'model', payload: { type: 'text', content: '' }, timestamp: Date.now(), characterId };
+        setChats(prev => ({ ...prev, [characterId]: [...prev[characterId], pendingMessage] }));
 
         try {
             const chat = await getChat(character);
@@ -423,28 +483,28 @@ const App: React.FC = () => {
             let firstChunkReceived = false;
 
             for await (const chunk of result) {
-                 if (!firstChunkReceived) {
+                if (!firstChunkReceived) {
                     firstChunkReceived = true;
                     setChats(prev => {
                         const newChats = { ...prev };
                         const chatHistory = [...(newChats[characterId] || [])];
                         const pendingMsgIndex = chatHistory.findIndex(m => m.id === pendingMessageId);
                         if (pendingMsgIndex !== -1) {
-                             const updatedMsg = { ...chatHistory[pendingMsgIndex] };
-                             updatedMsg.payload = { type: 'text', content: ' ' };
-                             chatHistory[pendingMsgIndex] = updatedMsg;
-                             newChats[characterId] = chatHistory;
+                            const updatedMsg = { ...chatHistory[pendingMsgIndex] };
+                            updatedMsg.payload = { type: 'text', content: ' ' };
+                            chatHistory[pendingMsgIndex] = updatedMsg;
+                            newChats[characterId] = chatHistory;
                         }
                         return newChats;
                     });
                 }
-                
+
                 messageBuffer += chunk.text;
             }
 
             const finalMessagesToSave: ChatMessage[] = [];
             const parts = messageBuffer.split(MULTI_MESSAGE_SEPARATOR).map(p => p.trim()).filter(Boolean);
-            
+
             parts.forEach((part, index) => {
                 let payload: ChatMessagePayload;
                 const stickerMatch = part.match(/\[sticker:(.*?)\]/);
@@ -490,7 +550,7 @@ const App: React.FC = () => {
             } else if (error.message?.includes("API Key not set")) {
                 errorMessage = "Please add and select an API Key in the 'Me' tab.";
             }
-            
+
             const errorMsg: ChatMessage = { ...pendingMessage, id: pendingMessageId, payload: { type: 'text', content: errorMessage } };
             await db.chats.put(errorMsg);
             setChats(prev => {
@@ -519,8 +579,9 @@ const App: React.FC = () => {
             const updatedMessage: ChatMessage = {
                 ...message,
                 payload: { type: 'text', content: newContent },
-                edited: true,
             };
+            delete updatedMessage.edited; // Remove the edited flag
+
             await db.chats.put(updatedMessage);
             setChats(prev => {
                 const newChats = { ...prev };
@@ -558,23 +619,27 @@ const App: React.FC = () => {
     };
 
     const handleLikePost = async (postId: string, likerId: string) => {
-        const targetPost = posts.find(p => p.id === postId);
+        // FIX: To prevent race conditions, always fetch the latest post data from the database
+        // right before making a modification. This avoids overwriting other likes or comments
+        // that may have been added by another concurrent process (like an AI interaction).
+        const targetPost = await db.posts.get(postId);
         if (!targetPost) return;
 
-        let newLikes = [...targetPost.likes];
+        const currentLikes = targetPost.likes || [];
+        let newLikes = [...currentLikes];
         const isLiked = newLikes.includes(likerId);
 
         if (isLiked && likerId === USER_ID) {
-            newLikes = newLikes.filter(id => id !== likerId); // Unlike
+            newLikes = newLikes.filter(id => id !== likerId); // User unlikes
         } else if (!isLiked) {
-            newLikes.push(likerId); // Like
+            newLikes.push(likerId); // User or AI likes
         }
-        
+
         const updatedPost = { ...targetPost, likes: newLikes };
         await db.posts.put(updatedPost);
         setPosts(prevPosts => prevPosts.map(p => p.id === postId ? updatedPost : p));
     };
-    
+
     const generateActivityForPost = async (post: MomentPost) => {
         const author = allPersonas[post.authorId];
         if (!author) return;
@@ -596,10 +661,12 @@ const App: React.FC = () => {
                         const commentContent = await generateAiContent(prompt);
                         if (commentContent && commentContent.trim() !== '') {
                             const newComment: Comment = { id: `comment_${Date.now()}_${commenter.id}`, authorId: commenter.id, content: commentContent };
-                            
+
+                            // FIX: Re-fetch the post from DB inside the timeout to get the latest version,
+                            // preventing overwrites of user interactions that happened in the meantime.
                             const currentPost = await db.posts.get(post.id);
                             if (currentPost) {
-                                const updatedPost = { ...currentPost, comments: [...currentPost.comments, newComment] };
+                                const updatedPost = { ...currentPost, comments: [...(currentPost.comments || []), newComment] };
                                 await db.posts.put(updatedPost);
                                 setPosts(prevPosts => prevPosts.map(p => p.id === post.id ? updatedPost : p));
                             }
@@ -616,6 +683,7 @@ const App: React.FC = () => {
         for (const liker of potentialLikers) {
             if (Math.random() > 0.4) { // 60% chance
                 setTimeout(() => {
+                    // handleLikePost already fetches the latest post from DB, so it's safe to call directly.
                     handleLikePost(post.id, liker.id);
                 }, Math.random() * 8000 + 4000);
             }
@@ -674,15 +742,19 @@ const App: React.FC = () => {
             authorId: USER_ID,
             content: commentText,
         };
-        const targetPost = posts.find(p => p.id === postId);
+        // FIX: To prevent race conditions, always fetch the latest post data from the database
+        // right before making a modification.
+        const targetPost = await db.posts.get(postId);
         if (!targetPost) return;
-        
-        const updatedPost = {...targetPost, comments: [...targetPost.comments, newComment]};
+
+        const currentComments = targetPost.comments || [];
+        const updatedPost = { ...targetPost, comments: [...currentComments, newComment] };
         await db.posts.put(updatedPost);
         setPosts(prev => prev.map(p => p.id === postId ? updatedPost : p));
-        
+
         if (activeApiKeyId) {
-            generateActivityForPost(targetPost);
+            // Pass the updated post to avoid race conditions with AI interactions
+            generateActivityForPost(updatedPost);
         }
     };
 
@@ -700,21 +772,22 @@ const App: React.FC = () => {
         setShowAddCharacterModal(false);
     };
 
-    const handleEditCharacter = async (id: string, name: string, avatarUrl: string, instruction: string, chatBackgroundUrl?: string, nicknameForUser?: string, autoReplyDelay?: number) => {
-        const updatedCharacter = { ...characters.find(c => c.id === id)!, name, avatarUrl, systemInstruction: instruction, chatBackgroundUrl, nicknameForUser, autoReplyDelay };
+    const handleEditCharacter = async (id: string, name: string, avatarUrl: string, instruction: string, chatBackgroundUrl?: string, nicknameForUser?: string, autoReplyDelay?: number, todos?: Todo[], anniversaries?: Anniversary[], historyMemory?: number) => {
+        const character = characters.find(c => c.id === id)!;
+        const updatedCharacter = { ...character, name, avatarUrl, systemInstruction: instruction, chatBackgroundUrl, nicknameForUser, autoReplyDelay, todos, anniversaries, historyMemory };
         await db.characters.put(updatedCharacter);
         setCharacters(prev => prev.map(c => c.id === id ? updatedCharacter : c));
         setCharacterToEditId(null);
         chatInstances.current = {};
     }
-    
+
     const handleDeleteCharacter = async (id: string) => {
         if (!window.confirm("Are you sure you want to delete this character? All associated chats, posts, and comments will be permanently removed.")) {
             return;
         }
-        
+
         await db.transaction('rw', db.characters, db.chats, db.posts, async () => {
-             // 1. Remove character
+            // 1. Remove character
             await db.characters.delete(id);
 
             // 2. Remove chat history
@@ -754,15 +827,15 @@ const App: React.FC = () => {
 
     const handleSaveApiConfig = async (newConfig: ApiConfig) => {
         setApiConfig(newConfig);
-        await db.settings.put({key: 'apiConfig', value: newConfig});
+        await db.settings.put({ key: 'apiConfig', value: newConfig });
         chatInstances.current = {};
     };
-    
+
     const handleSetTheme = async (theme: Theme) => {
         setTheme(theme);
         await db.settings.put({ key: 'chatTheme', value: theme });
     }
-    
+
     const handleSetMomentsBg = async (bg: string | null) => {
         setMomentsBackground(bg);
         await db.settings.put({ key: 'momentsBackground', value: bg });
@@ -829,22 +902,22 @@ const App: React.FC = () => {
 
     const triggerAutoReply = useCallback(async (characterId: string) => {
         if (autoReplyingRef.current.has(characterId)) return;
-    
+
         const character = characters.find(c => c.id === characterId);
         if (!character || !character.autoReplyDelay || character.autoReplyDelay <= 0) return;
-    
+
         try {
             autoReplyingRef.current.add(characterId);
-            
+
             console.log(`Sending auto-reply to ${character.name}`);
             const pendingMessageId = `msg_${Date.now()}_pending_auto`;
-            const pendingMessage: ChatMessage = {id: pendingMessageId, role: 'model', payload: {type: 'text', content: ''}, timestamp: Date.now(), characterId};
-            setChats(prev => ({...prev, [characterId]: [...(prev[characterId] || []), pendingMessage]}));
-    
+            const pendingMessage: ChatMessage = { id: pendingMessageId, role: 'model', payload: { type: 'text', content: '' }, timestamp: Date.now(), characterId };
+            setChats(prev => ({ ...prev, [characterId]: [...(prev[characterId] || []), pendingMessage] }));
+
             const chat = await getChat(character);
             const autoReplyPrompt = "[SYSTEM_NOTE: The user has not responded for a while. Send a short, in-character follow-up message to re-engage them. You can ask a question or start a new, related topic. Do not mention that this is an automated message or a system prompt.]";
             const result = await chat.sendMessageStream({ message: autoReplyPrompt });
-    
+
             let messageBuffer = '';
             let firstChunkReceived = false;
             for await (const chunk of result) {
@@ -855,16 +928,16 @@ const App: React.FC = () => {
                         const chatHistory = [...(newChats[characterId] || [])];
                         const pendingMsgIndex = chatHistory.findIndex(m => m.id === pendingMessageId);
                         if (pendingMsgIndex !== -1) {
-                             const updatedMsg = { ...chatHistory[pendingMsgIndex], payload: { type: 'text', content: ' ' } as const };
-                             chatHistory[pendingMsgIndex] = updatedMsg;
-                             newChats[characterId] = chatHistory;
+                            const updatedMsg = { ...chatHistory[pendingMsgIndex], payload: { type: 'text', content: ' ' } as const };
+                            chatHistory[pendingMsgIndex] = updatedMsg;
+                            newChats[characterId] = chatHistory;
                         }
                         return newChats;
                     });
                 }
                 messageBuffer += chunk.text;
             }
-    
+
             const finalMessagesToSave: ChatMessage[] = [];
             const parts = messageBuffer.split(MULTI_MESSAGE_SEPARATOR).map(p => p.trim()).filter(Boolean);
             parts.forEach((part, index) => {
@@ -873,7 +946,7 @@ const App: React.FC = () => {
                 const transferMatch = part.match(/\[transfer:(.*?):(.*?)\]/);
                 const imageMatch = part.match(/\[image:(.*?)\]/);
                 const locationMatch = part.match(/\[location:(.*?)\]/);
-    
+
                 if (stickerMatch) {
                     const stickerName = stickerMatch[1].trim();
                     const sticker = customStickers.find(s => s.name === stickerName);
@@ -887,7 +960,7 @@ const App: React.FC = () => {
                 } else {
                     payload = { type: 'text', content: part };
                 }
-    
+
                 finalMessagesToSave.push({
                     id: `msg_${Date.now()}_auto_${index}`,
                     characterId,
@@ -896,7 +969,7 @@ const App: React.FC = () => {
                     timestamp: Date.now() + index,
                 });
             });
-    
+
             if (finalMessagesToSave.length > 0) {
                 await db.chats.bulkPut(finalMessagesToSave);
                 setChats(prev => {
@@ -906,7 +979,7 @@ const App: React.FC = () => {
             } else {
                 setChats(prev => ({ ...prev, [characterId]: (prev[characterId] || []).filter(m => m.id !== pendingMessageId) }));
             }
-    
+
         } catch (error) {
             console.error(`Error sending auto-reply to ${characterId}:`, error);
             setChats(prev => ({ ...prev, [characterId]: (prev[characterId] || []).filter(m => !m.id.includes('_pending_auto')) }));
@@ -925,7 +998,7 @@ const App: React.FC = () => {
                         if (lastMessage.role === 'model') {
                             const timeSinceLastMessage = Date.now() - lastMessage.timestamp;
                             const delayInMillis = char.autoReplyDelay * 60 * 1000;
-    
+
                             if (timeSinceLastMessage > delayInMillis) {
                                 triggerAutoReply(char.id);
                             }
@@ -934,18 +1007,18 @@ const App: React.FC = () => {
                 }
             }
         };
-    
-        const intervalId = setInterval(checkIdleChats, 60000); 
+
+        const intervalId = setInterval(checkIdleChats, 60000);
         return () => clearInterval(intervalId);
     }, [characters, chats, triggerAutoReply]);
-    
+
     if (!isDbLoaded) {
         return <div className="loading-screen">Loading...</div>
     }
 
     const activeCharacter = characters.find(c => c.id === activeChatCharacterId);
     const characterToEdit = characters.find(c => c.id === characterToEditId);
-    
+
     const activeCharacterForBg = characters.find(c => c.id === activeChatCharacterId);
     const activeChatBg = activeCharacterForBg?.chatBackgroundUrl;
 
@@ -1088,6 +1161,17 @@ const ContactsView: React.FC<{ characters: Character[]; onSelectChat: (id: strin
     );
 };
 
+const DescriptiveImageBubble: React.FC<{ description: string }> = ({ description }) => (
+    <div className="descriptive-image-bubble">
+        <div className="descriptive-image-icon">
+            <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                <path d="M811.272038 156.318208l-595.873246 0c-46.818305 0-85.124749 38.306444-85.124749 85.124749l0 535.616884c0 46.818305 38.306444 85.124749 85.124749 85.124749l595.873246 0c46.818305 0 85.124749-38.306444 85.124749-85.124749l0-535.616884C896.396787 194.624652 858.090343 156.318208 811.272038 156.318208zM318.595129 255.961626c42.952254 0 77.771271 34.819017 77.771271 77.771271s-34.819017 77.771271-77.771271 77.771271-77.771271-34.819017-77.771271-77.771271S275.642874 255.961626 318.595129 255.961626zM215.398792 734.497467l148.9678-197.609637 106.405425 127.687124 148.968823-191.530175 191.530175 261.45371L215.398792 734.49849z"></path>
+            </svg>
+        </div>
+        <p>{description}</p>
+    </div>
+);
+
 const ChatMessageContent: React.FC<{ message: ChatMessage; stickers: CustomSticker[]; }> = ({ message, stickers }) => {
     const { payload, role } = message;
 
@@ -1099,18 +1183,9 @@ const ChatMessageContent: React.FC<{ message: ChatMessage; stickers: CustomStick
             return sticker ? <img src={sticker.imageUrl} alt={sticker.name} className="sticker-in-chat" /> : '[Sticker not found]';
         }
         case 'image':
-            return (
-                <div className="descriptive-image-bubble">
-                    <div className="descriptive-image-icon">
-                        <svg viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M811.272038 156.318208l-595.873246 0c-46.818305 0-85.124749 38.306444-85.124749 85.124749l0 535.616884c0 46.818305 38.306444 85.124749 85.124749 85.124749l595.873246 0c46.818305 0 85.124749-38.306444 85.124749-85.124749l0-535.616884C896.396787 194.624652 858.090343 156.318208 811.272038 156.318208zM318.595129 255.961626c42.952254 0 77.771271 34.819017 77.771271 77.771271s-34.819017 77.771271-77.771271 77.771271-77.771271-34.819017-77.771271-77.771271S275.642874 255.961626 318.595129 255.961626zM215.398792 734.497467l148.9678-197.609637 106.405425 127.687124 148.968823-191.530175 191.530175 261.45371L215.398792 734.49849z"></path>
-                        </svg>
-                    </div>
-                    <p>{payload.description}</p>
-                </div>
-            );
+            return <DescriptiveImageBubble description={payload.description} />;
         case 'location':
-             return (
+            return (
                 <div className="location-bubble-wechat">
                     <div className="location-bubble-text">
                         <h5>{payload.name}</h5>
@@ -1168,7 +1243,7 @@ const ActionsPanel: React.FC<{ onAction: (action: 'transfer' | 'image' | 'locati
     return (
         <div className={`actions-panel ${isOpen ? 'open' : ''}`}>
             <div className="actions-grid">
-                 <div className="action-item" onClick={() => onAction('image')}>
+                <div className="action-item" onClick={() => onAction('image')}>
                     <div className="action-icon-wrapper"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9-2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"></path></svg></div>
                     <span className="action-label">Image</span>
                 </div>
@@ -1176,7 +1251,7 @@ const ActionsPanel: React.FC<{ onAction: (action: 'transfer' | 'image' | 'locati
                     <div className="action-icon-wrapper transfer-icon-bg"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 2v2.51c-.63-.33-1.31-.51-2-.51-2.76 0-5 2.24-5 5s2.24 5 5 5c.69 0 1.37-.18 2-.51V20H4V8h16zM18 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z"></path></svg></div>
                     <span className="action-label">Transfer</span>
                 </div>
-                 <div className="action-item" onClick={() => onAction('location')}>
+                <div className="action-item" onClick={() => onAction('location')}>
                     <div className="action-icon-wrapper"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"></path></svg></div>
                     <span className="action-label">Location</span>
                 </div>
@@ -1254,7 +1329,7 @@ const DescriptionInputModal: React.FC<{ type: 'image' | 'location'; onClose: () 
 };
 
 
-const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSendMessage: (characterId: string, payload: ChatMessagePayload) => void; onBack: () => void; onShowDetails: () => void; userAvatar: string; customStickers: CustomSticker[]; onAddSticker: () => void; onDeleteSticker: (id: string) => void; onDeleteMessage: (characterId: string, messageId: string) => void; onEditMessage: (characterId: string, messageId: string, newContent: string) => void; }> = ({ character, messages, onSendMessage, onBack, onShowDetails, userAvatar, customStickers, onAddSticker, onDeleteSticker, onDeleteMessage, onEditMessage }) => {
+const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSendMessage: (characterId: string, payload: ChatMessagePayload | ChatMessagePayload[]) => void; onBack: () => void; onShowDetails: () => void; userAvatar: string; customStickers: CustomSticker[]; onAddSticker: () => void; onDeleteSticker: (id: string) => void; onDeleteMessage: (characterId: string, messageId: string) => void; onEditMessage: (characterId: string, messageId: string, newContent: string) => void; }> = ({ character, messages, onSendMessage, onBack, onShowDetails, userAvatar, customStickers, onAddSticker, onDeleteSticker, onDeleteMessage, onEditMessage }) => {
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -1287,30 +1362,64 @@ const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSend
     const handleSend = async () => {
         const messageToSend = input.trim();
         if (messageToSend === '' || isSending) return;
+
         setIsSending(true);
         setInput('');
+
         await onSendMessage(character.id, { type: 'text', content: messageToSend });
+
         setIsSending(false);
         inputRef.current?.focus();
     };
 
     const handleSendSticker = (sticker: CustomSticker) => {
-        onSendMessage(character.id, { type: 'sticker', stickerId: sticker.id });
+        const textToSend = input.trim();
+        const payloads: ChatMessagePayload[] = [];
+
+        if (textToSend) {
+            payloads.push({ type: 'text', content: textToSend });
+            setInput('');
+        }
+
+        payloads.push({ type: 'sticker', stickerId: sticker.id });
+
+        onSendMessage(character.id, payloads);
         setActivePanel(null);
     };
 
     const handleSendTransfer = (amount: number, notes: string) => {
-        onSendMessage(character.id, { type: 'transfer', amount, notes });
+        const textToSend = input.trim();
+        const payloads: ChatMessagePayload[] = [];
+
+        if (textToSend) {
+            payloads.push({ type: 'text', content: textToSend });
+            setInput('');
+        }
+
+        payloads.push({ type: 'transfer', amount, notes });
+
+        onSendMessage(character.id, payloads);
         setShowTransferModal(false);
-        setActivePanel(null);
     };
 
     const handleSendDescription = (description: string) => {
         if (showDescriptionModal) {
+            const textToSend = input.trim();
+            const payloads: ChatMessagePayload[] = [];
+
+            if (textToSend) {
+                payloads.push({ type: 'text', content: textToSend });
+                setInput('');
+            }
+
             if (showDescriptionModal === 'image') {
-                onSendMessage(character.id, { type: 'image', description });
+                payloads.push({ type: 'image', description });
             } else if (showDescriptionModal === 'location') {
-                onSendMessage(character.id, { type: 'location', name: description });
+                payloads.push({ type: 'location', name: description });
+            }
+
+            if (payloads.length > 0) {
+                onSendMessage(character.id, payloads);
             }
         }
         setShowDescriptionModal(null);
@@ -1324,14 +1433,12 @@ const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSend
             case 'location': setShowDescriptionModal('location'); break;
         }
     };
-    
+
     const handleContextMenu = (e: React.MouseEvent, message: ChatMessage) => {
-        if (message.role === 'user') {
-            e.preventDefault();
-            setContextMenu({ x: e.pageX, y: e.pageY, message });
-        }
+        e.preventDefault();
+        setContextMenu({ x: e.pageX, y: e.pageY, message });
     };
-    
+
     useEffect(() => {
         const closeMenu = () => setContextMenu(null);
         window.addEventListener('click', closeMenu);
@@ -1357,7 +1464,7 @@ const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSend
                 {messages.map((msg, index) => {
                     const prevMsg = messages[index - 1];
                     const showTimestamp = !prevMsg || (msg.timestamp - prevMsg.timestamp > TIME_GAP_THRESHOLD);
-                    
+
                     if (msg.payload.type === 'text' && msg.payload.content.trim() === '') return null;
 
                     const isSpecial = msg.payload.type !== 'text';
@@ -1368,15 +1475,35 @@ const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSend
                             <div className={`message-bubble-wrapper ${msg.role}`}>
                                 <div className={`message-bubble ${msg.role} ${isSpecial ? 'special-content-bubble' : ''}`} onContextMenu={(e) => handleContextMenu(e, msg)}>
                                     <img src={msg.role === 'model' ? character.avatarUrl : userAvatar} alt={msg.role} className="avatar" />
-                                     {editingMessage?.id === msg.id ? (
+                                    {editingMessage?.id === msg.id ? (
                                         <div className="message-content editing">
-                                            <input type="text" value={editText} onChange={(e) => setEditText(e.target.value)} autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} />
+                                            <textarea
+                                                value={editText}
+                                                onChange={(e) => setEditText(e.target.value)}
+                                                onInput={(e) => {
+                                                    const target = e.currentTarget;
+                                                    target.style.height = 'auto';
+                                                    target.style.height = `${target.scrollHeight}px`;
+                                                }}
+                                                onFocus={(e) => {
+                                                    const target = e.currentTarget;
+                                                    target.style.height = 'auto';
+                                                    target.style.height = `${target.scrollHeight}px`;
+                                                }}
+                                                autoFocus
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault(); // Prevent new line on Enter
+                                                        handleSaveEdit();
+                                                    }
+                                                }}
+                                                onBlur={handleSaveEdit}
+                                            />
                                             <button onClick={handleSaveEdit}>Save</button>
                                         </div>
                                     ) : (
                                         <div className="message-content">
                                             <ChatMessageContent message={msg} stickers={customStickers} />
-                                            {msg.edited && <span className="edited-indicator">(edited)</span>}
                                         </div>
                                     )}
                                 </div>
@@ -1403,10 +1530,10 @@ const ChatView: React.FC<{ character: Character; messages: ChatMessage[]; onSend
                 <StickerPanel stickers={customStickers} onSelectSticker={handleSendSticker} onAddSticker={onAddSticker} onDeleteSticker={onDeleteSticker} isOpen={activePanel === 'stickers'} />
                 <ActionsPanel onAction={handleAction} isOpen={activePanel === 'actions'} />
             </footer>
-             {contextMenu && (
+            {contextMenu && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }}>
-                    {contextMenu.message.payload.type === 'text' && <div onClick={() => setEditingMessage(contextMenu.message)}>Edit</div>}
-                    <div onClick={() => onDeleteMessage(character.id, contextMenu.message.id)}>Delete</div>
+                    {contextMenu.message.payload.type === 'text' && <div onClick={() => { setEditingMessage(contextMenu.message); setContextMenu(null); }}>Edit</div>}
+                    <div onClick={() => { onDeleteMessage(character.id, contextMenu.message.id); setContextMenu(null); }}>Delete</div>
                 </div>
             )}
             {showTransferModal && <TransferModal character={character} onClose={() => setShowTransferModal(false)} onSend={handleSendTransfer} />}
@@ -1436,15 +1563,15 @@ const MomentsView: React.FC<{ personas: Record<string, { name: string, avatarUrl
 
     const handlePost = () => { setShowMenu(false); onAddPost(); };
     const handleGenerate = () => { setShowMenu(false); onGenerate(); };
-    
+
     const coverPhotoStyle = {
-      backgroundImage: `url(${momentsBackground || 'https://source.unsplash.com/random/800x500?nature,landscape'})`,
+        backgroundImage: `url(${momentsBackground || 'https://source.unsplash.com/random/800x500?nature,landscape'})`,
     };
 
     return (
         <div className="moments-page">
             <Header title="Moments" onAction={() => setShowMenu(s => !s)} actionIcon="camera" className={`moments-header ${headerOpaque ? 'opaque' : ''}`} />
-             {showMenu &&
+            {showMenu &&
                 <div className="moments-action-menu" ref={menuRef}>
                     <div onClick={handlePost}>Create Post</div>
                     <div onClick={handleGenerate}>Generate AI Moment</div>
@@ -1453,10 +1580,10 @@ const MomentsView: React.FC<{ personas: Record<string, { name: string, avatarUrl
             <main className="main-content moments-view" onScroll={handleScroll}>
                 <div className="moments-feed-header">
                     <div className="moments-cover-photo" style={coverPhotoStyle}></div>
-                     <div className="moments-user-info">
-                            <span>{userName}</span>
-                            <img src={userAvatar} alt="user avatar" className="avatar" />
-                        </div>
+                    <div className="moments-user-info">
+                        <span>{userName}</span>
+                        <img src={userAvatar} alt="user avatar" className="avatar" />
+                    </div>
                 </div>
                 <div className="moments-posts-list">
                     {posts.map(post => {
@@ -1486,7 +1613,7 @@ const MomentPostItem: React.FC<{ post: MomentPost; author: { name: string; avata
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-    
+
     useEffect(() => {
         if (isCommenting) {
             commentInputRef.current?.focus();
@@ -1505,47 +1632,52 @@ const MomentPostItem: React.FC<{ post: MomentPost; author: { name: string; avata
         onLikePost(post.id);
         setShowActions(false);
     }
-    
+
     const handleCommentClick = () => {
         setIsCommenting(true);
         setShowActions(false);
     }
-    
-    const hasLikesOrComments = post.likes.length > 0 || post.comments.length > 0;
+
+    const hasLikesOrComments = (post.likes || []).length > 0 || (post.comments || []).length > 0;
+    const imageMatch = post.content.match(/\[image:(.*?)\]/);
 
     return (
         <div className="moment-post">
             <div className="moment-header"><img src={author.avatarUrl} alt={author.name} className="avatar" /><h4>{author.name}</h4></div>
-            <p className="moment-content">{post.content}</p>
+            {imageMatch ? (
+                <DescriptiveImageBubble description={imageMatch[1].trim()} />
+            ) : (
+                <p className="moment-content">{post.content}</p>
+            )}
             <div className="moment-footer">
                 <span className="moment-timestamp">{post.timestamp}</span>
                 <div className="moment-actions-trigger" onClick={() => setShowActions(s => !s)}>...</div>
                 {showActions && (
                     <div className="moment-actions-menu" ref={actionsRef}>
                         <div className="action-item" onClick={handleLikeClick}>
-                           <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-                           {post.likes.includes(USER_ID) ? 'Unlike' : 'Like'}
+                            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+                            {(post.likes || []).includes(USER_ID) ? 'Unlike' : 'Like'}
                         </div>
                         <div className="action-item" onClick={handleCommentClick}>
-                             <svg viewBox="0 0 24 24"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"></path></svg>
-                             Comment
+                            <svg viewBox="0 0 24 24"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"></path></svg>
+                            Comment
                         </div>
                     </div>
                 )}
             </div>
             {(hasLikesOrComments || isCommenting) &&
                 <div className="likes-and-comments-section">
-                    {post.likes.length > 0 &&
+                    {(post.likes || []).length > 0 &&
                         <div className="likes-section">
-                           <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
-                            {post.likes.map((likerId, index) => (
+                            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg>
+                            {(post.likes || []).map((likerId, index) => (
                                 <span key={likerId} className="like-author">
                                     {personas[likerId]?.name}{index < post.likes.length - 1 ? ',' : ''}
                                 </span>
                             ))}
                         </div>
                     }
-                    {post.comments.map(comment => {
+                    {(post.comments || []).map(comment => {
                         const commenter = personas[comment.authorId];
                         return (
                             <div key={comment.id} className="comment-item">
@@ -1559,9 +1691,9 @@ const MomentPostItem: React.FC<{ post: MomentPost; author: { name: string; avata
                     })}
                 </div>
             }
-             {isCommenting &&
+            {isCommenting &&
                 <div className="comment-input-area">
-                    <input ref={commentInputRef} type="text" placeholder="Add a comment..." value={commentInput} onChange={e => setCommentInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleCommentSubmit()} onBlur={() => {!commentInput && setIsCommenting(false)}}/>
+                    <input ref={commentInputRef} type="text" placeholder="Add a comment..." value={commentInput} onChange={e => setCommentInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleCommentSubmit()} onBlur={() => { !commentInput && setIsCommenting(false) }} />
                     <button onClick={handleCommentSubmit} disabled={!commentInput.trim()}>Send</button>
                 </div>
             }
@@ -1742,18 +1874,212 @@ const AddCharacterModal: React.FC<{ onClose: () => void; onSave: (name: string, 
     </div></div>);
 };
 
-const CharacterDetailsView: React.FC<{ character: Character, onBack: () => void; onSave: (id: string, name: string, avatarUrl: string, instruction: string, chatBackgroundUrl?: string, nicknameForUser?: string, autoReplyDelay?: number) => void; userName: string; onDelete: (id: string) => void; }> = ({ character, onBack, onSave, userName, onDelete }) => {
+{/* FIX: Replaced corrupted/incomplete CharacterTodoView with the full implementation and added other missing components. */ }
+const CharacterTodoView: React.FC<{ todos: Todo[]; onUpdate: (newTodos: Todo[]) => void; }> = ({ todos, onUpdate }) => {
+    const [newTask, setNewTask] = useState('');
+
+    const handleAddTask = () => {
+        if (!newTask.trim()) return;
+        const newTodos = [...todos, { id: Date.now(), text: newTask.trim(), done: false }];
+        onUpdate(newTodos);
+        setNewTask('');
+    };
+
+    const handleToggleTask = (id: number) => {
+        const newTodos = todos.map(task => task.id === id ? { ...task, done: !task.done } : task);
+        onUpdate(newTodos);
+    };
+
+    const handleDeleteTask = (id: number) => {
+        const newTodos = todos.filter(task => task.id !== id);
+        onUpdate(newTodos);
+    };
+
+    const sortedTodos = [...todos].sort((a, b) => a.done === b.done ? 0 : a.done ? 1 : -1);
+
+    return (
+        <div className="character-addons-container">
+            <div className="todo-list">
+                {sortedTodos.map(task => (
+                    <div className="todo-item" key={task.id}>
+                        <label className="checkbox-label">
+                            <input type="checkbox" checked={task.done} onChange={() => handleToggleTask(task.id)} />
+                            <span className={`todo-text ${task.done ? 'completed' : ''}`}>{task.text}</span>
+                        </label>
+                        <button className="delete-btn" onClick={() => handleDeleteTask(task.id)}>
+                            <svg fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                        </button>
+                    </div>
+                ))}
+            </div>
+            <div className="input-box">
+                <input
+                    type="text"
+                    className="text-input"
+                    value={newTask}
+                    onChange={(e) => setNewTask(e.target.value)}
+                    placeholder="+ 添加新的小事..."
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddTask()}
+                />
+                <button onClick={handleAddTask} className="add-task-btn">
+                    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const CharacterAnniversaryView: React.FC<{ anniversaries: Anniversary[]; onUpdate: (newAnnis: Anniversary[]) => void; }> = ({ anniversaries, onUpdate }) => {
+    const [newName, setNewName] = useState('');
+    const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
+    const [isPinned, setIsPinned] = useState(false);
+
+    const handleAdd = () => {
+        if (!newName.trim() || !newDate) return;
+        const newAnnis = [...anniversaries, { id: Date.now(), name: newName.trim(), date: newDate, pinned: isPinned }];
+        onUpdate(newAnnis);
+        setNewName('');
+        setNewDate(new Date().toISOString().split("T")[0]);
+        setIsPinned(false);
+    };
+
+    const handleDelete = (id: number) => {
+        onUpdate(anniversaries.filter(a => a.id !== id));
+    };
+
+    const handleTogglePin = (id: number) => {
+        onUpdate(anniversaries.map(a => a.id === id ? { ...a, pinned: !a.pinned } : a));
+    };
+
+    const sortedAnnis = [...anniversaries].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    return (
+        <div className="character-addons-container">
+            <div className="add-anni-form card">
+                <div className="add-anni-controls">
+                    <input
+                        type="text"
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        className="text-input"
+                        placeholder="纪念日名称"
+                    />
+                    <input
+                        type="date"
+                        value={newDate}
+                        onChange={e => setNewDate(e.target.value)}
+                        className="text-input"
+                    />
+                    <label className="checkbox-label">
+                        <input
+                            type="checkbox"
+                            checked={isPinned}
+                            onChange={e => setIsPinned(e.target.checked)}
+                        />
+                        置顶显示
+                    </label>
+                    <button onClick={handleAdd} className="btn btn-full-width">
+                        <svg fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path>
+                        </svg>
+                        添加纪念日
+                    </button>
+                </div>
+            </div>
+
+
+            <div className="anni-list">
+                {sortedAnnis.map(anni => {
+                    const now = new Date();
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const date = new Date(anni.date);
+                    const diff = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    let msg: string;
+                    if (diff === 0) {
+                        msg = '今天!';
+                    } else if (diff === 1) {
+                        msg = '明天!';
+                    } else if (diff > 1) {
+                        msg = `还有 ${diff} 天`;
+                    } else {
+                        msg = `已过去 ${Math.abs(diff)} 天`;
+                    }
+                    
+                    const pinClass = anni.pinned ? 'btn-icon active' : 'btn-icon';
+
+                    return (
+                        <div className="anni-item card" key={anni.id}>
+                            <div className="anni-item-content">
+                                <div className="anni-item-text">
+                                    <strong className="anni-item-name">{anni.name}</strong>
+                                    <small className="anni-item-date">{anni.date} ({msg})</small>
+                                </div>
+                                <div className="anni-item-actions">
+                                    <button className={pinClass} onClick={() => handleTogglePin(anni.id)} title={anni.pinned ? '取消置顶' : '置顶'}>
+                                        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"></path></svg>
+                                    </button>
+                                    <button className="btn-icon btn-icon-danger" onClick={() => handleDelete(anni.id)}>
+                                        <svg fill="currentColor" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const getNextAnniversary = (anniversaries: Anniversary[]): { name: string; daysLeft: number } | null => {
+    if (!anniversaries || anniversaries.length === 0) return null;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const currentYear = today.getFullYear();
+
+    const upcomingAnniversaries = anniversaries.map(anni => {
+        const anniDate = new Date(anni.date);
+        let nextOccurrence = new Date(currentYear, anniDate.getMonth(), anniDate.getDate());
+
+        // If it has already passed this year, check next year's occurrence
+        if (nextOccurrence < today) {
+            nextOccurrence.setFullYear(currentYear + 1);
+        }
+
+        const diffTime = nextOccurrence.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+            name: anni.name,
+            daysLeft: diffDays,
+        };
+    });
+
+    // Sort to find the one with the fewest days left
+    upcomingAnniversaries.sort((a, b) => a.daysLeft - b.daysLeft);
+
+    return upcomingAnniversaries[0];
+};
+
+
+const CharacterDetailsView: React.FC<{ character: Character, onBack: () => void; onSave: (id: string, name: string, avatarUrl: string, instruction: string, chatBackgroundUrl?: string, nicknameForUser?: string, autoReplyDelay?: number, todos?: Todo[], anniversaries?: Anniversary[], historyMemory?: number) => void; userName: string; onDelete: (id: string) => void; }> = ({ character, onBack, onSave, userName, onDelete }) => {
     const [name, setName] = useState(character.name);
     const [avatarUrl, setAvatarUrl] = useState(character.avatarUrl);
     const [instruction, setInstruction] = useState(character.systemInstruction);
     const [backgroundUrl, setBackgroundUrl] = useState(character.chatBackgroundUrl);
     const [nickname, setNickname] = useState(character.nicknameForUser || '');
     const [autoReplyDelay, setAutoReplyDelay] = useState(character.autoReplyDelay || 0);
+    const [historyMemory, setHistoryMemory] = useState(character.historyMemory || 0);
+    const [todos, setTodos] = useState<Todo[]>(character.todos || []);
+    const [anniversaries, setAnniversaries] = useState<Anniversary[]>(character.anniversaries || []);
+    const [activeAddonView, setActiveAddonView] = useState<'todo' | 'anniversary' | null>(null);
     const bgInputRef = useRef<HTMLInputElement>(null);
 
     const handleSave = () => {
         if (name.trim() && instruction.trim()) {
-            onSave(character.id, name.trim(), avatarUrl.trim(), instruction.trim(), backgroundUrl, nickname.trim(), autoReplyDelay);
+            onSave(character.id, name.trim(), avatarUrl.trim(), instruction.trim(), backgroundUrl, nickname.trim(), autoReplyDelay, todos, anniversaries, historyMemory);
         }
     };
 
@@ -1770,10 +2096,49 @@ const CharacterDetailsView: React.FC<{ character: Character, onBack: () => void;
         }
     };
 
+    if (activeAddonView === 'todo') {
+        return (
+            <div className="details-view addon-view">
+                <Header title="To-Do List" onBack={() => setActiveAddonView(null)} />
+                <main className="main-content details-main-content no-padding">
+                    <CharacterTodoView todos={todos} onUpdate={setTodos} />
+                </main>
+            </div>
+        );
+    }
+
+    if (activeAddonView === 'anniversary') {
+        return (
+            <div className="details-view addon-view">
+                <Header title="Anniversaries" onBack={() => setActiveAddonView(null)} />
+                <main className="main-content details-main-content no-padding">
+                    <CharacterAnniversaryView anniversaries={anniversaries} onUpdate={setAnniversaries} />
+                </main>
+            </div>
+        );
+    }
+
+    const nextAnni = getNextAnniversary(anniversaries);
+    
+    const getNextAnniText = (anni: { name: string; daysLeft: number } | null): string | null => {
+        if (!anni) return null;
+        let countdownText = '';
+        if (anni.daysLeft === 0) {
+            countdownText = '今天!';
+        } else if (anni.daysLeft === 1) {
+            countdownText = '明天!';
+        } else if (anni.daysLeft > 1) {
+            countdownText = `还有 ${anni.daysLeft} 天`;
+        }
+        // No text for past anniversaries in summary
+        return countdownText ? `${anni.name} ${countdownText}` : null;
+    };
+
+
     return (
         <div className="details-view">
             <Header title="Character Details" onBack={onBack} />
-            <main className="main-content">
+            <main className="main-content details-main-content">
                 <div className="details-form">
                     <AvatarUploader currentAvatar={avatarUrl} onAvatarChange={setAvatarUrl} className="modal-avatar-uploader" />
                     <div className="form-group">
@@ -1784,10 +2149,15 @@ const CharacterDetailsView: React.FC<{ character: Character, onBack: () => void;
                         <label htmlFor="char-nickname-edit">Nickname for You</label>
                         <input id="char-nickname-edit" type="text" value={nickname} onChange={e => setNickname(e.target.value)} placeholder={`e.g., Captain, Boss, ${userName}`} />
                     </div>
-                     <div className="form-group">
+                    <div className="form-group">
                         <label htmlFor="char-autoreply-edit">Auto-Reply Delay (minutes)</label>
                         <input id="char-autoreply-edit" type="number" min="0" value={autoReplyDelay} onChange={e => setAutoReplyDelay(parseInt(e.target.value, 10) || 0)} placeholder="0 to disable" />
                         <small className="form-group-note">Set a time for the character to message you if you're idle. Set to 0 to disable.</small>
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="char-history-memory">AI Memory Depth (Messages)</label>
+                        <input id="char-history-memory" type="number" min="0" value={historyMemory} onChange={e => setHistoryMemory(parseInt(e.target.value, 10) || 0)} />
+                        <small className="form-group-note">Max number of past messages the AI remembers. 0 means unlimited.</small>
                     </div>
                     <div className="form-group">
                         <label htmlFor="char-instruction-edit">System Instruction (Persona)</label>
@@ -1801,6 +2171,17 @@ const CharacterDetailsView: React.FC<{ character: Character, onBack: () => void;
                                 <span className="arrow">&gt;</span>
                             </div>
                             <input type="file" ref={bgInputRef} style={{ display: 'none' }} accept="image/*" onChange={handleBgChange} />
+                        </div>
+                        <div className="settings-item" onClick={() => setActiveAddonView('todo')}>
+                            <span>To-Do List</span>
+                            <div className="addon-summary"><span className="arrow">&gt;</span></div>
+                        </div>
+                        <div className="settings-item" onClick={() => setActiveAddonView('anniversary')}>
+                            <span>Anniversaries</span>
+                            <div className="addon-summary">
+                                {getNextAnniText(nextAnni) && <span className="next-event">{getNextAnniText(nextAnni)}</span>}
+                                <span className="arrow">&gt;</span>
+                            </div>
                         </div>
                     </div>
                     <button className="save-btn-full" onClick={handleSave}>Save Changes</button>
@@ -1857,11 +2238,13 @@ const BottomNav: React.FC<{ activeView: View; onViewChange: (view: View) => void
     <nav className="bottom-nav">
         <button className={`nav-item ${activeView === 'chats' ? 'active' : ''}`} onClick={() => onViewChange('chats')}><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"></path></svg><span>Chats</span></button>
         <button className={`nav-item ${activeView === 'contacts' ? 'active' : ''}`} onClick={() => onViewChange('contacts')}><svg viewBox="0 0 24 24"><path d="M20 0H4v2h16V0zM4 24h16v-2H4v2zM20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 2.75c1.24 0 2.25 1.01 2.25 2.25S13.24 11.25 12 11.25 9.75 10.24 9.75 9 10.76 6.75 12 6.75zM17 17H7v-1.5c0-1.67 3.33-2.5 5-2.5s5 .83 5 2.5V17z"></path></svg><span>Contacts</span></button>
-        <button className={`nav-item ${activeView === 'moments' ? 'active' : ''}`} onClick={() => onViewChange('moments')}><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg><span>Moments</span></button>
+        <button className={`nav-item ${activeView === 'moments' ? 'active' : ''}`} onClick={() => onViewChange('moments')}><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"></path></svg><span>Moments</span></button>
         <button className={`nav-item ${activeView === 'me' ? 'active' : ''}`} onClick={() => onViewChange('me')}><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg><span>Me</span></button>
     </nav>
 );
 
 const container = document.getElementById('root');
-const root = createRoot(container!);
-root.render(<App />);
+if (container) {
+    const root = createRoot(container);
+    root.render(<App />);
+}
